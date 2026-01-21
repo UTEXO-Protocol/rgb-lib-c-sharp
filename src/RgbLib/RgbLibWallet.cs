@@ -155,6 +155,42 @@ namespace RgbLib
         }
 
         /// <summary>
+        /// Begin send operation (returns unsigned PSBT)
+        /// </summary>
+        public string SendBegin(string recipientMap, bool donation = false, string? feeRate = null, string? minConfirmations = null)
+        {
+            EnsureNotDisposed();
+            EnsureOnline();
+            var result = NativeMethods.rgblib_send_begin(
+                _walletPtr, 
+                _onlinePtr, 
+                recipientMap, 
+                donation, 
+                feeRate ?? "", 
+                minConfirmations ?? "");
+            if (!result.IsSuccess)
+            {
+                throw new RgbLibException(result.GetError() ?? "Failed to begin send");
+            }
+            return result.GetResult() ?? throw new RgbLibException("Empty result");
+        }
+
+        /// <summary>
+        /// End send operation (broadcast signed PSBT)
+        /// </summary>
+        public string SendEnd(string signedPsbt, bool skipSync = false)
+        {
+            EnsureNotDisposed();
+            EnsureOnline();
+            var result = NativeMethods.rgblib_send_end(_walletPtr, _onlinePtr, signedPsbt, skipSync);
+            if (!result.IsSuccess)
+            {
+                throw new RgbLibException(result.GetError() ?? "Failed to end send");
+            }
+            return result.GetResult() ?? throw new RgbLibException("Empty result");
+        }
+
+        /// <summary>
         /// List transfers for an asset
         /// </summary>
         public string ListTransfers(string assetId)

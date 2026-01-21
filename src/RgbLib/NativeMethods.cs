@@ -154,6 +154,22 @@ namespace RgbLib
             [MarshalAs(UnmanagedType.Bool)] bool skip_sync);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern CResultString rgblib_send_begin(
+            IntPtr wallet,
+            IntPtr online,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string recipient_map,
+            [MarshalAs(UnmanagedType.Bool)] bool donation,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string fee_rate,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string min_confirmations);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern CResultString rgblib_send_end(
+            IntPtr wallet,
+            IntPtr online,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string signed_psbt,
+            [MarshalAs(UnmanagedType.Bool)] bool skip_sync);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
         public static extern CResultString rgblib_list_transfers(
             IntPtr wallet,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string asset_id);
