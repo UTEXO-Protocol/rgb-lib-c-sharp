@@ -1,0 +1,208 @@
+name: Build and Release
+
+on:
+  # Trigger from rgb-lib repository
+  repository_dispatch:
+    types: [rgb-lib-release]
+
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      rgb_lib_version:
+        description: 'rgb-lib version to use (e.g., v0.3.0-beta.5)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build (${{ matrix.rid }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x64
+          - runner: ubuntu-latest
+            rid: linux-x64
+            lib_name: librgblibcffi.so
+            target: x86_64-unknown-linux-gnu
+          # macOS ARM64 (Apple Silicon)
+          - runner: macos-latest
+            rid: osx-arm64
+            lib_name: librgblibcffi.dylib
+            target: aarch64-apple-darwin
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get rgb-lib version
+        id: rgb_lib_version
+        run: |
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            echo "version=${{ github.event.client_payload.version }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=${{ inputs.rgb_lib_version }}" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Download rgb-lib C-FFI library
+        run: |
+          VERSION="${{ steps.rgb_lib_version.outputs.version }}"
+          TARGET="${{ matrix.target }}"
+          LIB_NAME="${{ matrix.lib_name }}"
+          
+          echo "Downloading rgb-lib $VERSION for $TARGET..."
+          
+          # Download from rgb-lib releases
+          DOWNLOAD_URL="https://github.com/UTEXO-Protocol/rgb-lib/releases/download/${VERSION}/rgb-lib-cffi-${TARGET}.zip"
+          
+          echo "URL: $DOWNLOAD_URL"
+          curl -L -o cffi.zip "$DOWNLOAD_URL"
+          
+          # Extract
+          unzip -o cffi.zip
+          
+          # Create native directory
+          mkdir -p src/RgbLib/runtimes/${{ matrix.rid }}/native
+          
+          # Copy library
+          cp $LIB_NAME src/RgbLib/runtimes/${{ matrix.rid }}/native/
+          
+          echo "Library copied to src/RgbLib/runtimes/${{ matrix.rid }}/native/$LIB_NAME"
+          ls -la src/RgbLib/runtimes/${{ matrix.rid }}/native/
+        shell: bash
+
+      - name: Build
+        run: |
+          cd src/RgbLib
+          dotnet build -c Release
+        shell: bash
+
+      - name: Pack NuGet
+        run: |
+          cd src/RgbLib
+          dotnet pack -c Release -o ../../packages
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rgblib-${{ matrix.rid }}
+          path: |
+            src/RgbLib/runtimes/
+            packages/*.nupkg
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get rgb-lib version
+        id: rgb_lib_version
+        run: |
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            echo "version=${{ github.event.client_payload.version }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=${{ inputs.rgb_lib_version }}" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare combined package
+        run: |
+          mkdir -p combined/runtimes
+          
+          # Copy all native libraries
+          for dir in artifacts/rgblib-*/runtimes/*/; do
+            rid=$(basename $(dirname $dir))
+            mkdir -p combined/runtimes/$rid
+            cp -r $dir/* combined/runtimes/$rid/
+          done
+          
+          ls -laR combined/
+        shell: bash
+
+      - name: Update csproj for multi-platform
+        run: |
+          # Add native library references to csproj
+          cat > src/RgbLib/RgbLib.csproj << 'EOF'
+          <Project Sdk="Microsoft.NET.Sdk">
+
+            <PropertyGroup>
+              <TargetFramework>net8.0</TargetFramework>
+              <ImplicitUsings>enable</ImplicitUsings>
+              <Nullable>enable</Nullable>
+              <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+              
+              <!-- NuGet Package Info -->
+              <PackageId>RgbLib</PackageId>
+              <Version>${{ steps.rgb_lib_version.outputs.version }}</Version>
+              <Authors>UTEXO-Protocol</Authors>
+              <Description>C# bindings for rgb-lib - RGB smart contracts library</Description>
+              <PackageLicenseExpression>MIT</PackageLicenseExpression>
+              <RepositoryUrl>https://github.com/UTEXO-Protocol/rgb-lib-c-sharp</RepositoryUrl>
+              <PackageTags>rgb;bitcoin;smart-contracts;rgb-lib</PackageTags>
+            </PropertyGroup>
+
+            <!-- Native libraries -->
+            <ItemGroup>
+              <None Include="runtimes\**\*" Pack="true" PackagePath="runtimes" />
+            </ItemGroup>
+
+          </Project>
+          EOF
+          
+          # Copy runtimes
+          cp -r combined/runtimes src/RgbLib/
+        shell: bash
+
+      - name: Build final package
+        run: |
+          cd src/RgbLib
+          dotnet pack -c Release -o ../../release
+        shell: bash
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.rgb_lib_version.outputs.version }}
+          name: Release ${{ steps.rgb_lib_version.outputs.version }}
+          body: |
+            ## rgb-lib C# Bindings ${{ steps.rgb_lib_version.outputs.version }}
+            
+            C# bindings for rgb-lib built from [UTEXO-Protocol/rgb-lib](https://github.com/UTEXO-Protocol/rgb-lib/releases/tag/${{ steps.rgb_lib_version.outputs.version }})
+            
+            ### Supported Platforms
+            - Linux x64 (`linux-x64`)
+            - macOS ARM64 (`osx-arm64`)
+            
+            ### Installation
+            ```bash
+            dotnet add package RgbLib --version ${{ steps.rgb_lib_version.outputs.version }}
+            ```
+          files: |
+            release/*.nupkg
+          draft: false
+          prerelease: ${{ contains(steps.rgb_lib_version.outputs.version, 'beta') || contains(steps.rgb_lib_version.outputs.version, 'alpha') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

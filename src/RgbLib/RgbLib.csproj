@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    
+    <!-- NuGet Package Info -->
+    <PackageId>RgbLib</PackageId>
+    <Version>0.3.0-beta.5</Version>
+    <Authors>UTEXO-Protocol</Authors>
+    <Description>C# bindings for rgb-lib - RGB smart contracts library</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/UTEXO-Protocol/rgb-lib-c-sharp</RepositoryUrl>
+    <PackageTags>rgb;bitcoin;smart-contracts;rgb-lib</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Native library will be included at build time -->
+  </ItemGroup>
+
+</Project>
+
