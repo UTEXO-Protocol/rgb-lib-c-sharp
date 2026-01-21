@@ -131,13 +131,23 @@ jobs:
         run: |
           mkdir -p combined/runtimes
           
-          # Copy all native libraries
-          for dir in artifacts/rgblib-*/runtimes/*/; do
-            rid=$(basename $(dirname $dir))
-            mkdir -p combined/runtimes/$rid
-            cp -r $dir/* combined/runtimes/$rid/
+          echo "=== Artifact structure ==="
+          find artifacts -type f -name "*.so" -o -name "*.dylib" | head -20
+          ls -laR artifacts/
+          
+          # Copy all native libraries from each platform artifact
+          for artifact_dir in artifacts/rgblib-*/; do
+            echo "Processing: $artifact_dir"
+            
+            # Find and copy runtimes
+            if [ -d "$artifact_dir/src/RgbLib/runtimes" ]; then
+              cp -r "$artifact_dir/src/RgbLib/runtimes/"* combined/runtimes/
+            elif [ -d "$artifact_dir/runtimes" ]; then
+              cp -r "$artifact_dir/runtimes/"* combined/runtimes/
+            fi
           done
           
+          echo "=== Combined runtimes ==="
           ls -laR combined/
         shell: bash
 
