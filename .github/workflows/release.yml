@@ -159,32 +159,32 @@ jobs:
           echo "NuGet version: $NUGET_VERSION"
           
           # Add native library references to csproj
-          cat > src/RgbLib/RgbLib.csproj << EOF
+          cat > src/RgbLib/RgbLib.csproj <<CSPROJ
           <Project Sdk="Microsoft.NET.Sdk">
-
             <PropertyGroup>
               <TargetFramework>net8.0</TargetFramework>
               <ImplicitUsings>enable</ImplicitUsings>
               <Nullable>enable</Nullable>
               <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-              
-              <!-- NuGet Package Info -->
               <PackageId>RgbLib</PackageId>
-              <Version>$NUGET_VERSION</Version>
+              <Version>${NUGET_VERSION}</Version>
               <Authors>UTEXO-Protocol</Authors>
               <Description>C# bindings for rgb-lib - RGB smart contracts library</Description>
               <PackageLicenseExpression>MIT</PackageLicenseExpression>
               <RepositoryUrl>https://github.com/UTEXO-Protocol/rgb-lib-c-sharp</RepositoryUrl>
               <PackageTags>rgb;bitcoin;smart-contracts;rgb-lib</PackageTags>
             </PropertyGroup>
-
-            <!-- Native libraries -->
             <ItemGroup>
-              <None Include="runtimes\\**\\*" Pack="true" PackagePath="runtimes" />
+              <None Include="runtimes/**/*" Pack="true" PackagePath="runtimes" />
             </ItemGroup>
-
           </Project>
-EOF
+          CSPROJ
+          
+          # Remove leading spaces from csproj
+          sed -i 's/^          //' src/RgbLib/RgbLib.csproj
+          
+          echo "Generated csproj:"
+          cat src/RgbLib/RgbLib.csproj
           
           # Copy runtimes
           cp -r combined/runtimes src/RgbLib/
