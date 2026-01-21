@@ -153,8 +153,13 @@ jobs:
 
       - name: Update csproj for multi-platform
         run: |
+          # Remove 'v' prefix from version for NuGet
+          NUGET_VERSION="${{ steps.rgb_lib_version.outputs.version }}"
+          NUGET_VERSION="${NUGET_VERSION#v}"
+          echo "NuGet version: $NUGET_VERSION"
+          
           # Add native library references to csproj
-          cat > src/RgbLib/RgbLib.csproj << 'EOF'
+          cat > src/RgbLib/RgbLib.csproj << EOF
           <Project Sdk="Microsoft.NET.Sdk">
 
             <PropertyGroup>
@@ -165,7 +170,7 @@ jobs:
               
               <!-- NuGet Package Info -->
               <PackageId>RgbLib</PackageId>
-              <Version>${{ steps.rgb_lib_version.outputs.version }}</Version>
+              <Version>$NUGET_VERSION</Version>
               <Authors>UTEXO-Protocol</Authors>
               <Description>C# bindings for rgb-lib - RGB smart contracts library</Description>
               <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -175,11 +180,11 @@ jobs:
 
             <!-- Native libraries -->
             <ItemGroup>
-              <None Include="runtimes\**\*" Pack="true" PackagePath="runtimes" />
+              <None Include="runtimes\\**\\*" Pack="true" PackagePath="runtimes" />
             </ItemGroup>
 
           </Project>
-          EOF
+EOF
           
           # Copy runtimes
           cp -r combined/runtimes src/RgbLib/
