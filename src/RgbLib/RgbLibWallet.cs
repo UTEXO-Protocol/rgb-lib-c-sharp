@@ -1,6 +1,4 @@
 using System;
-using System.Runtime.InteropServices;
-using System.Text.Json;
 
 namespace RgbLib
 {
@@ -9,8 +7,8 @@ namespace RgbLib
     /// </summary>
     public class RgbLibWallet : IDisposable
     {
-        private IntPtr _walletPtr;
-        private IntPtr _onlinePtr;
+        private COpaqueStruct _wallet;
+        private COpaqueStruct _online;
         private bool _disposed;
 
         /// <summary>
@@ -19,12 +17,13 @@ namespace RgbLib
         /// <param name="walletData">JSON wallet configuration</param>
         public RgbLibWallet(string walletData)
         {
-            var result = NativeMethods.rgblib_new_wallet(walletData);
-            if (!result.IsSuccess)
+            var r = NativeMethods.rgblib_new_wallet(walletData);
+            if (!r.IsSuccess)
             {
-                throw new RgbLibException(result.GetError() ?? "Failed to create wallet");
+                throw new RgbLibException("Failed to create wallet");
             }
-            _walletPtr = result.result;
+
+            _wallet = r.inner;
         }
 
         /// <summary>
@@ -32,12 +31,12 @@ namespace RgbLib
         /// </summary>
         public static string GenerateKeys(string bitcoinNetwork)
         {
-            var result = NativeMethods.rgblib_generate_keys(bitcoinNetwork);
-            if (!result.IsSuccess)
+            var r = NativeMethods.rgblib_generate_keys(bitcoinNetwork);
+            if (!r.IsSuccess)
             {
-                throw new RgbLibException(result.GetError() ?? "Failed to generate keys");
+                throw new RgbLibException(r.GetError() ?? "Failed to generate keys");
             }
-            return result.GetResult() ?? throw new RgbLibException("Empty result");
+            return r.GetResult() ?? throw new RgbLibException("Empty result");
         }
 
         /// <summary>
@@ -45,12 +44,12 @@ namespace RgbLib
         /// </summary>
         public static string RestoreKeys(string bitcoinNetwork, string mnemonic)
         {
-            var result = NativeMethods.rgblib_restore_keys(bitcoinNetwork, mnemonic);
-            if (!result.IsSuccess)
+            var r = NativeMethods.rgblib_restore_keys(bitcoinNetwork, mnemonic);
+            if (!r.IsSuccess)
             {
-                throw new RgbLibException(result.GetError() ?? "Failed to restore keys");
+                throw new RgbLibException(r.GetError() ?? "Failed to restore keys");
             }
-            return result.GetResult() ?? throw new RgbLibException("Empty result");
+            return r.GetResult() ?? throw new RgbLibException("Empty result");
         }
 
         /// <summary>
@@ -59,12 +58,14 @@ namespace RgbLib
         public void GoOnline(string electrumUrl, bool skipConsistencyCheck = false)
         {
             EnsureNotDisposed();
-            var result = NativeMethods.rgblib_go_online(_walletPtr, skipConsistencyCheck, electrumUrl);
-            if (!result.IsSuccess)
+
+            var r = NativeMethods.rgblib_go_online(ref _wallet, skipConsistencyCheck, electrumUrl);
+            if (!r.IsSuccess)
             {
-                throw new RgbLibException(result.GetError() ?? "Failed to go online");
+                throw new RgbLibException("Failed to go online");
             }
-            _onlinePtr = result.result;
+
+            _online = r.inner;
         }
 
         /// <summary>
@@ -73,12 +74,14 @@ namespace RgbLib
         public string GetAddress()
         {
             EnsureNotDisposed();
-            var result = NativeMethods.rgblib_get_address(_walletPtr);
-            if (!result.IsSuccess)
+
+            var r = NativeMethods.rgblib_get_address(ref _wallet);
+            if (!r.IsSuccess)
             {
-                throw new RgbLibException(result.GetError() ?? "Failed to get address");
+                throw new RgbLibException(r.GetError() ?? "Failed to get address");
             }
-            return result.GetResult() ?? throw new RgbLibException("Empty result");
+
+            return r.GetResult() ?? throw new RgbLibException("Empty result");
         }
 
         /// <summary>
@@ -88,12 +91,14 @@ namespace RgbLib
         {
             EnsureNotDisposed();
             EnsureOnline();
-            var result = NativeMethods.rgblib_get_btc_balance(_walletPtr, _onlinePtr, skipSync);
-            if (!result.IsSuccess)
+
+            var r = NativeMethods.rgblib_get_btc_balance(ref _wallet, ref _online, skipSync);
+            if (!r.IsSuccess)
             {
-                throw new RgbLibException(result.GetError() ?? "Failed to get BTC balance");
+                throw new RgbLibException(r.GetError() ?? "Failed to get BTC balance");
             }
-            return result.GetResult() ?? throw new RgbLibException("Empty result");
+
+            return r.GetResult() ?? throw new RgbLibException("Empty result");
         }
 
         /// <summary>
@@ -102,151 +107,169 @@ namespace RgbLib
         public string GetAssetBalance(string assetId)
         {
             EnsureNotDisposed();
-            var result = NativeMethods.rgblib_get_asset_balance(_walletPtr, assetId);
-            if (!result.IsSuccess)
+
+            var r = NativeMethods.rgblib_get_asset_balance(ref _wallet, assetId);
+            if (!r.IsSuccess)
             {
-                throw new RgbLibException(result.GetError() ?? "Failed to get asset balance");
+                throw new RgbLibException(r.GetError() ?? "Failed to get asset balance");
             }
-            return result.GetResult() ?? throw new RgbLibException("Empty result");
+
+            return r.GetResult() ?? throw new RgbLibException("Empty result");
         }
 
         /// <summary>
         /// Create UTXOs
+        /// NOTE: Rust ABI expects num/size/fee_rate as strings (num_opt/size_opt/fee_rate: *const c_char).
+        /// So this method now takes strings. Pass "" to use defaults.
         /// </summary>
-        public string CreateUtxos(bool upTo = false, byte num = 1, uint size = 1000, float feeRate = 1.0f, bool skipSync = false)
+        public string CreateUtxos(
+            bool upTo = false,
+            string numOpt = "",
+            string sizeOpt = "",
+            string feeRate = "",
+            bool skipSync = false)
         {
             EnsureNotDisposed();
             EnsureOnline();
-            var result = NativeMethods.rgblib_create_utxos(_walletPtr, _onlinePtr, upTo, num, size, feeRate, skipSync);
-            if (!result.IsSuccess)
+
+            var r = NativeMethods.rgblib_create_utxos(ref _wallet, ref _online, upTo, numOpt, sizeOpt, feeRate, skipSync);
+            if (!r.IsSuccess)
             {
-                throw new RgbLibException(result.GetError() ?? "Failed to create UTXOs");
+                throw new RgbLibException(r.GetError() ?? "Failed to create UTXOs");
             }
-            return result.GetResult() ?? throw new RgbLibException("Empty result");
+
+            return r.GetResult() ?? throw new RgbLibException("Empty result");
         }
 
         /// <summary>
         /// List assets
         /// </summary>
-        public string ListAssets(string? filterAssetSchemas = null)
+        public string ListAssets(string filterAssetSchemas = "[]")
         {
             EnsureNotDisposed();
-            var result = NativeMethods.rgblib_list_assets(_walletPtr, filterAssetSchemas ?? "[]");
-            if (!result.IsSuccess)
+
+            var r = NativeMethods.rgblib_list_assets(ref _wallet, filterAssetSchemas);
+            if (!r.IsSuccess)
             {
-                throw new RgbLibException(result.GetError() ?? "Failed to list assets");
+                throw new RgbLibException(r.GetError() ?? "Failed to list assets");
             }
-            return result.GetResult() ?? throw new RgbLibException("Empty result");
+
+            return r.GetResult() ?? throw new RgbLibException("Empty result");
         }
 
         /// <summary>
         /// Issue NIA (Non-Inflatable Asset)
+        /// NOTE: Rust ABI precision is string (*const c_char)
         /// </summary>
-        public string IssueAssetNia(string ticker, string name, byte precision, string amounts)
+        public string IssueAssetNia(string ticker, string name, string precision, string amounts)
         {
             EnsureNotDisposed();
-            EnsureOnline();
-            var result = NativeMethods.rgblib_issue_asset_nia(_walletPtr, _onlinePtr, ticker, name, precision, amounts);
-            if (!result.IsSuccess)
+
+            var r = NativeMethods.rgblib_issue_asset_nia(ref _wallet, ticker, name, precision, amounts);
+            if (!r.IsSuccess)
             {
-                throw new RgbLibException(result.GetError() ?? "Failed to issue NIA asset");
+                throw new RgbLibException(r.GetError() ?? "Failed to issue NIA asset");
             }
-            return result.GetResult() ?? throw new RgbLibException("Empty result");
+
+            return r.GetResult() ?? throw new RgbLibException("Empty result");
         }
 
         /// <summary>
-        /// Begin send operation (returns unsigned PSBT)
+        /// Begin send operation
+        /// NOTE: Rust ABI fee_rate and min_confirmations are strings
         /// </summary>
-        public string SendBegin(string recipientMap, bool donation = false, string? feeRate = null, string? minConfirmations = null)
+        public string SendBegin(string recipientMap, bool donation = false, string feeRate = "", string minConfirmations = "")
         {
             EnsureNotDisposed();
             EnsureOnline();
-            var result = NativeMethods.rgblib_send_begin(
-                _walletPtr, 
-                _onlinePtr, 
-                recipientMap, 
-                donation, 
-                feeRate ?? "", 
-                minConfirmations ?? "");
-            if (!result.IsSuccess)
+
+            var r = NativeMethods.rgblib_send_begin(ref _wallet, ref _online, recipientMap, donation, feeRate, minConfirmations);
+            if (!r.IsSuccess)
             {
-                throw new RgbLibException(result.GetError() ?? "Failed to begin send");
+                throw new RgbLibException(r.GetError() ?? "Failed to begin send");
             }
-            return result.GetResult() ?? throw new RgbLibException("Empty result");
+
+            return r.GetResult() ?? throw new RgbLibException("Empty result");
         }
 
         /// <summary>
-        /// End send operation (broadcast signed PSBT)
+        /// End send operation
         /// </summary>
         public string SendEnd(string signedPsbt, bool skipSync = false)
         {
             EnsureNotDisposed();
             EnsureOnline();
-            var result = NativeMethods.rgblib_send_end(_walletPtr, _onlinePtr, signedPsbt, skipSync);
-            if (!result.IsSuccess)
+
+            var r = NativeMethods.rgblib_send_end(ref _wallet, ref _online, signedPsbt, skipSync);
+            if (!r.IsSuccess)
             {
-                throw new RgbLibException(result.GetError() ?? "Failed to end send");
+                throw new RgbLibException(r.GetError() ?? "Failed to end send");
             }
-            return result.GetResult() ?? throw new RgbLibException("Empty result");
+
+            return r.GetResult() ?? throw new RgbLibException("Empty result");
         }
 
         /// <summary>
         /// List transfers for an asset
+        /// NOTE: Rust ABI takes asset_id_opt as string
         /// </summary>
-        public string ListTransfers(string assetId)
+        public string ListTransfers(string assetIdOpt = "")
         {
             EnsureNotDisposed();
-            var result = NativeMethods.rgblib_list_transfers(_walletPtr, assetId);
-            if (!result.IsSuccess)
+
+            var r = NativeMethods.rgblib_list_transfers(ref _wallet, assetIdOpt);
+            if (!r.IsSuccess)
             {
-                throw new RgbLibException(result.GetError() ?? "Failed to list transfers");
+                throw new RgbLibException(r.GetError() ?? "Failed to list transfers");
             }
-            return result.GetResult() ?? throw new RgbLibException("Empty result");
+
+            return r.GetResult() ?? throw new RgbLibException("Empty result");
         }
 
         /// <summary>
         /// Refresh wallet state
+        /// NOTE: Rust ABI asset_id_opt/filter are strings
         /// </summary>
-        public string Refresh(string? assetId = null, string? filter = null, bool skipSync = false)
+        public string Refresh(string assetIdOpt = "", string filter = "", bool skipSync = false)
         {
             EnsureNotDisposed();
             EnsureOnline();
-            var result = NativeMethods.rgblib_refresh(_walletPtr, _onlinePtr, assetId ?? "", filter ?? "", skipSync);
-            if (!result.IsSuccess)
+
+            var r = NativeMethods.rgblib_refresh(ref _wallet, ref _online, assetIdOpt, filter, skipSync);
+            if (!r.IsSuccess)
             {
-                throw new RgbLibException(result.GetError() ?? "Failed to refresh");
+                throw new RgbLibException(r.GetError() ?? "Failed to refresh");
             }
-            return result.GetResult() ?? throw new RgbLibException("Empty result");
+
+            return r.GetResult() ?? throw new RgbLibException("Empty result");
         }
 
         /// <summary>
         /// Backup wallet
+        /// Rust ABI returns CResult (no string payload). Return "OK" on success.
         /// </summary>
         public string Backup(string backupPath, string password)
         {
             EnsureNotDisposed();
-            var result = NativeMethods.rgblib_backup(_walletPtr, backupPath, password);
-            if (!result.IsSuccess)
+
+            var r = NativeMethods.rgblib_backup(ref _wallet, backupPath, password);
+            if (!r.IsSuccess)
             {
-                throw new RgbLibException(result.GetError() ?? "Failed to backup");
+                throw new RgbLibException("Failed to backup");
             }
-            return result.GetResult() ?? throw new RgbLibException("Empty result");
+
+            return "OK";
         }
 
         private void EnsureNotDisposed()
         {
-            if (_disposed)
-            {
-                throw new ObjectDisposedException(nameof(RgbLibWallet));
-            }
+            if (_disposed) throw new ObjectDisposedException(nameof(RgbLibWallet));
         }
 
         private void EnsureOnline()
         {
-            if (_onlinePtr == IntPtr.Zero)
-            {
+            if (_online.ptr == IntPtr.Zero)
                 throw new InvalidOperationException("Wallet is not online. Call GoOnline() first.");
-            }
         }
 
         public void Dispose()
@@ -257,22 +280,21 @@ namespace RgbLib
 
         protected virtual void Dispose(bool disposing)
         {
-            if (!_disposed)
+            if (_disposed) return;
+
+            if (_online.ptr != IntPtr.Zero)
             {
-                if (_onlinePtr != IntPtr.Zero)
-                {
-                    NativeMethods.free_online(_onlinePtr);
-                    _onlinePtr = IntPtr.Zero;
-                }
-
-                if (_walletPtr != IntPtr.Zero)
-                {
-                    NativeMethods.free_wallet(_walletPtr);
-                    _walletPtr = IntPtr.Zero;
-                }
-
-                _disposed = true;
+                NativeMethods.free_online(_online);
+                _online = default;
             }
+
+            if (_wallet.ptr != IntPtr.Zero)
+            {
+                NativeMethods.free_wallet(_wallet);
+                _wallet = default;
+            }
+
+            _disposed = true;
         }
 
         ~RgbLibWallet()
@@ -289,4 +311,3 @@ namespace RgbLib
         public RgbLibException(string message) : base(message) { }
     }
 }
-
