@@ -18,6 +18,7 @@ Or add to your `.csproj`:
 
 - Linux x64 (`linux-x64`)
 - macOS ARM64 (`osx-arm64`)
+- Windows x64 (`win-x64`)
 
 ## Usage
 
@@ -82,7 +83,7 @@ else
 ### Prerequisites
 
 - .NET 8.0 SDK
-- Native rgb-lib library (`librgblibcffi.so` or `librgblibcffi.dylib`)
+- Native rgb-lib library (`librgblibcffi.so`, `librgblibcffi.dylib`, or `rgblibcffi.dll`)
 
 ### Build
 
